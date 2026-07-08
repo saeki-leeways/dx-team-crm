@@ -15,8 +15,8 @@ export async function renderDashboard() {
 
   // KPIカード（FR-05-1 の要約）
   const stats = el('div.grid.cols-4', {}, [
-    statCard('加重パイプライン', yen(summary.weighted), `オープン ${summary.openCount}件`),
     statCard('パイプライン総額', yen(summary.openTotal), '確度未加重'),
+    statCard('加重パイプライン', yen(summary.weighted), `オープン ${summary.openCount}件`),
     statCard('受注（今期計上）', yen(summary.wonTotal), 'クローズ済商談'),
     statCard('契約済 年換算', yen(summary.contractedAnnual), '月額×12'),
   ]);

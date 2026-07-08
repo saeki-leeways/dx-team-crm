@@ -12,8 +12,8 @@ export async function renderForecast() {
 
   // 加重フォーキャストのサマリ（FR-05-1）
   root.append(el('div.grid.cols-4.mb', {}, [
-    stat('加重パイプライン', yen(summary.weighted), '確度加重の売上見込み'),
     stat('パイプライン総額', yen(summary.openTotal), `オープン ${summary.openCount}件`),
+    stat('加重パイプライン', yen(summary.weighted), '確度加重の売上見込み'),
     stat('受注済', yen(summary.wonTotal), '確定売上'),
     stat('契約済 年換算', yen(summary.contractedAnnual), '月額契約×12'),
   ]));
