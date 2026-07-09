@@ -149,15 +149,41 @@ function renderMasters(body) {
   }
 }
 
-// 文字列配列エディタ
+const GRIP = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+
+// 行にドラッグ&ドロップ並び替えを付与（ハンドルからのみドラッグ開始）
+function attachReorder(row, index, arr, afterReorder) {
+  const handle = el('div.drag-handle', { draggable: 'true', title: 'ドラッグで並び替え', html: GRIP });
+  handle.addEventListener('dragstart', (e) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+    row.classList.add('dragging');
+  });
+  handle.addEventListener('dragend', () => row.classList.remove('dragging'));
+  row.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; row.classList.add('drop-hint'); });
+  row.addEventListener('dragleave', () => row.classList.remove('drop-hint'));
+  row.addEventListener('drop', (e) => {
+    e.preventDefault(); row.classList.remove('drop-hint');
+    const from = Number(e.dataTransfer.getData('text/plain'));
+    if (isNaN(from) || from === index) return;
+    const [moved] = arr.splice(from, 1);
+    arr.splice(index, 0, moved);
+    afterReorder();
+  });
+  return handle;
+}
+
+// 文字列配列エディタ（ドラッグ並び替え対応）
 function listEditor(title, arr, onChange) {
-  const card = el('div.card', { style: 'padding:14px' }, [el('div.section-title', {}, title)]);
+  const card = el('div.card', { style: 'padding:14px' }, [el('div.section-title', {}, [title, el('span.muted.small', { style: 'font-weight:400;margin-left:6px' }, '（ドラッグで並び替え）')])]);
   const listNode = el('div');
   const render = () => {
     clear(listNode);
     arr.forEach((v, i) => {
       const inp = input('_', v); inp.addEventListener('input', (e) => { arr[i] = e.target.value; onChange(arr); });
-      listNode.append(el('div.row', { style: 'margin-bottom:6px' }, [el('div', { style: 'flex:1' }, inp), el('button.btn.ghost.sm', { onclick: () => { arr.splice(i, 1); onChange(arr); render(); } }, '×')]));
+      const row = el('div.row.dnd-row', { style: 'margin-bottom:6px' });
+      row.append(attachReorder(row, i, arr, () => { onChange(arr); render(); }), el('div', { style: 'flex:1' }, inp), el('button.btn.ghost.sm', { onclick: () => { arr.splice(i, 1); onChange(arr); render(); } }, '×'));
+      listNode.append(row);
     });
   };
   render();
@@ -165,15 +191,17 @@ function listEditor(title, arr, onChange) {
   return card;
 }
 
-// {id,label}配列エディタ
+// {id,label}配列エディタ（ドラッグ並び替え対応）
 function labeledEditor(title, arr) {
-  const card = el('div.card', { style: 'padding:14px' }, [el('div.section-title', {}, title)]);
+  const card = el('div.card', { style: 'padding:14px' }, [el('div.section-title', {}, [title, el('span.muted.small', { style: 'font-weight:400;margin-left:6px' }, '（ドラッグで並び替え）')])]);
   const listNode = el('div');
   const render = () => {
     clear(listNode);
     arr.forEach((item, i) => {
       const inp = input('_', item.label); inp.addEventListener('input', (e) => item.label = e.target.value);
-      listNode.append(el('div.row', { style: 'margin-bottom:6px' }, [el('div', { style: 'flex:1' }, inp), el('button.btn.ghost.sm', { onclick: () => { arr.splice(i, 1); render(); } }, '×')]));
+      const row = el('div.row.dnd-row', { style: 'margin-bottom:6px' });
+      row.append(attachReorder(row, i, arr, render), el('div', { style: 'flex:1' }, inp), el('button.btn.ghost.sm', { onclick: () => { arr.splice(i, 1); render(); } }, '×'));
+      listNode.append(row);
     });
   };
   render();

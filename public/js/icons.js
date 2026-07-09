@@ -5,6 +5,10 @@ const svg = (paths) =>
 export const ICONS = {
   // ブランド（六角形＋上昇ライン）
   brand: svg('<path d="M12 2 4 6.5v11L12 22l8-4.5v-11L12 2Z"/><path d="M8 14l2.5-2.5L13 14l3-3.5"/>'),
+  // 折りたたみトグル（二重シェブロン左）。折りたたみ時はCSSで180°回転
+  chevron: svg('<path d="M15 6l-6 6 6 6"/><path d="M20 6l-6 6 6 6"/>'),
+  // ログアウト
+  logout: svg('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>'),
   // ダッシュボード（グリッド）
   dashboard: svg('<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>'),
   // 取引先・担当者（ビル）

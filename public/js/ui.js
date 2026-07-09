@@ -125,3 +125,45 @@ export function man(n) {
 export function fmtDate(s) { return s ? String(s).slice(0, 10) : '—'; }
 
 export function badge(text, color = 'gray') { return el('span.badge.' + color, {}, text); }
+
+// ---- 一覧テーブルの列幅リサイズ（各thの右端をドラッグ。隣接列と相互調整で合計幅を維持） ----
+export function makeTablesResizable(root) {
+  root.querySelectorAll('table').forEach((table) => {
+    if (table.dataset.resizable) return;
+    const ths = Array.from(table.querySelectorAll('thead th'));
+    if (ths.length < 2) return;
+    table.dataset.resizable = '1';
+    let initialized = false;
+    const initFixed = () => {
+      if (initialized) return;
+      ths.forEach((h) => { h.style.width = h.offsetWidth + 'px'; });
+      table.style.tableLayout = 'fixed';
+      table.style.width = 'max-content';   // 各列の指定幅をそのまま反映（合計＝テーブル幅）
+      table.style.minWidth = '100%';       // 縮めても最低カード幅は維持
+      if (table.parentElement) table.parentElement.style.overflowX = 'auto'; // はみ出しは横スクロール
+      initialized = true;
+    };
+    ths.forEach((th, i) => {
+      if (i === ths.length - 1) return; // 最終列の右端は不要
+      th.style.position = 'relative';
+      const grip = el('div.col-resizer');
+      let startX, startW;
+      const onMove = (e) => { th.style.width = Math.max(48, startW + (e.pageX - startX)) + 'px'; };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.classList.remove('col-resizing');
+      };
+      grip.addEventListener('mousedown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        initFixed();
+        startX = e.pageX; startW = th.offsetWidth;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.body.classList.add('col-resizing');
+      });
+      grip.addEventListener('click', (e) => e.stopPropagation());
+      th.appendChild(grip);
+    });
+  });
+}

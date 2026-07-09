@@ -3,15 +3,24 @@ import { api, state, userName } from '../api.js';
 import { el, yen, man, fmtDate, badge } from '../ui.js';
 
 export async function renderDashboard() {
-  const [summary, renewal, stale, tasks, opps] = await Promise.all([
+  const [summary, renewal, stale, tasks, opps, counts] = await Promise.all([
     api.get('/api/forecast/summary'),
     api.get('/api/alerts/renewal'),
     api.get('/api/alerts/stale?days=14'),
     api.get('/api/tasks'),
     api.get('/api/opportunities'),
+    api.get('/api/stats'),
   ]);
 
   const root = el('div');
+
+  // 件数サマリ（取引先・担当者・商談）
+  const countRow = el('div.grid.cols-3.mb', {}, [
+    countCard('取引先', counts.accounts, '🏢', '#accounts'),
+    countCard('担当者', counts.contacts, '👤', '#accounts'),
+    countCard('商談', counts.opportunities, '🗂️', '#pipeline'),
+  ]);
+  root.append(countRow);
 
   // KPIカード（FR-05-1 の要約）
   const stats = el('div.grid.cols-4', {}, [
@@ -118,6 +127,16 @@ function statCard(label, value, sub) {
   return el('div.card', {}, el('div.stat', {}, [
     el('div.label', {}, label), el('div.value', {}, value), el('div.sub', {}, sub),
   ]));
+}
+function countCard(label, count, ico, href) {
+  const card = el('a.card.count-card', { href }, el('div.stat', {}, [
+    el('div.row', { style: 'justify-content:space-between;align-items:flex-start' }, [
+      el('div', {}, [el('div.label', {}, label), el('div.value', {}, Number(count).toLocaleString('ja-JP'))]),
+      el('div.count-ico', {}, ico),
+    ]),
+    el('div.sub', {}, '登録件数'),
+  ]));
+  return card;
 }
 function th(t) { return el('th', {}, t); }
 function thn(t) { return el('th.num', {}, t); }

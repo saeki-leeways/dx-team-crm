@@ -144,6 +144,20 @@ api.get('/me', (req, res) => {
   });
 });
 
+// 件数サマリ（権限スコープ考慮）
+api.get('/stats', (req, res) => {
+  const d = db.get();
+  const accounts = d.accounts.filter((a) => accountVisible(req.user, a));
+  const accIds = new Set(accounts.map((a) => a.id));
+  res.json({
+    accounts: accounts.length,
+    contacts: d.contacts.filter((c) => accIds.has(c.accountId)).length,
+    opportunities: d.opportunities.filter((o) => oppVisible(req.user, o)).length,
+    quotes: d.quotes.filter((q) => quoteVisible(req.user, q)).length,
+    contracts: d.contracts.filter((c) => contractVisible(req.user, c)).length,
+  });
+});
+
 // ---------- 顧客（FR-01-1） ----------
 api.get('/accounts', (req, res) => {
   const d = db.get();

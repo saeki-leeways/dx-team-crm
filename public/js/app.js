@@ -1,6 +1,6 @@
 // app.js — エントリーポイント（ルーティング / ナビ / ログイン）
 import { state, login, logout, bootstrap, isAdmin } from './api.js';
-import { el, clear, toast, field, input } from './ui.js';
+import { el, clear, toast, field, input, makeTablesResizable } from './ui.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderAccounts } from './views/accounts.js';
 import { renderPipeline } from './views/pipeline.js';
@@ -43,6 +43,7 @@ async function renderApp() {
     const node = await route.render();
     clear(content);
     content.appendChild(node);
+    makeTablesResizable(content);
   } catch (e) {
     clear(content);
     content.appendChild(el('div.empty', {}, 'エラー: ' + e.message));
@@ -55,23 +56,38 @@ function renderSidebar(active) {
   const roleLabel = { admin: '管理者（全社）', manager: '事業体責任者', member: '営業担当' }[u.role] || u.role;
   const nav = el('nav.nav');
   ROUTES.filter((r) => !r.adminOnly || isAdmin()).forEach((r) => {
-    nav.appendChild(el('a', { href: '#' + r.id, class: r.id === active.id ? 'active' : '' }, [
-      el('span.nav-ico', { html: r.ico }), r.label,
+    nav.appendChild(el('a', { href: '#' + r.id, class: r.id === active.id ? 'active' : '', title: r.label }, [
+      el('span.nav-ico', { html: r.ico }), el('span.nav-label', {}, r.label),
     ]));
   });
-  return el('aside.sidebar', {}, [
+  const toggle = el('button.sidebar-toggle', { title: 'メニューを折りたたむ', html: ICONS.chevron, onclick: toggleSidebar });
+  const aside = el('aside.sidebar', {}, [
     el('div.brand', {}, [
       el('span.brand-ico', { html: ICONS.brand }),
       el('span.brand-txt', {}, [document.createTextNode('DX営業管理'), el('small', {}, 'Sales Information Hub')]),
+      toggle,
     ]),
     nav,
     el('div.userbox', {}, [
-      el('div', {}, u.name),
-      el('div.muted', {}, entityLabel(u.entityId) + ' / ' + (u.department || '—')),
-      el('span.role', {}, roleLabel),
-      el('div', {}, el('button', { onclick: doLogout }, 'ログアウト')),
+      el('div.u-detail', {}, [
+        el('div', {}, u.name),
+        el('div.muted', {}, entityLabel(u.entityId) + ' / ' + (u.department || '—')),
+        el('span.role', {}, roleLabel),
+      ]),
+      el('div', {}, el('button.logout-btn', { onclick: doLogout, title: 'ログアウト' }, [el('span.nav-ico', { html: ICONS.logout }), el('span.nav-label', {}, 'ログアウト')])),
     ]),
   ]);
+  if (localStorage.getItem('crm_sidebar_collapsed') === '1') aside.classList.add('collapsed');
+  return aside;
+}
+
+function toggleSidebar() {
+  const aside = document.querySelector('.sidebar');
+  if (!aside) return;
+  const collapsed = aside.classList.toggle('collapsed');
+  localStorage.setItem('crm_sidebar_collapsed', collapsed ? '1' : '0');
+  const t = aside.querySelector('.sidebar-toggle');
+  if (t) t.title = collapsed ? 'メニューを展開' : 'メニューを折りたたむ';
 }
 
 function entityLabel(id) { const e = state.me.entities.find((x) => x.id === id); return e ? e.name : ''; }
