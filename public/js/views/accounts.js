@@ -1,6 +1,6 @@
 // accounts.js — 取引先マスタ（FR-01-1・定義書 No.1／グループ階層 D3）＋ 担当者（FR-01-2・定義書 No.2）
 import { api, state, userName, entityName, master } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, fmtDate } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, fmtDate, importMsg } from '../ui.js';
 
 export async function renderAccounts() {
   const accounts = await api.get('/api/accounts');
@@ -220,7 +220,7 @@ function editAccount(account, accounts) {
 
 // CSV入出力（FR-08-4）
 function importExport(accounts) {
-  const cols = ['name', 'entityId', 'targetCategory', 'industryLarge', 'industryMedium', 'website', 'employees', 'capital', 'postalCode', 'parentId', 'address', 'ownerId', 'note'];
+  const cols = ['sfId', 'name', 'entityId', 'targetCategory', 'industryLarge', 'industryMedium', 'website', 'employees', 'capital', 'postalCode', 'parentId', 'address', 'ownerId', 'note'];
   const body = el('div');
   body.append(el('div.section-title', {}, 'エクスポート'));
   body.append(el('button.btn.secondary', { onclick: () => downloadCsv('accounts.csv', cols, accounts) }, '取引先CSVをダウンロード'));
@@ -240,7 +240,7 @@ function importExport(accounts) {
     const rows = parseCsv(text);
     try {
       const r = await api.post('/api/import/accounts', { rows });
-      toast(`${r.created}件を取り込みました`, 'success'); m.close(); rerender();
+      toast(importMsg(r), 'success'); m.close(); rerender();
     } catch (e) { toast(e.message, 'error'); }
   }
 }

@@ -1,6 +1,6 @@
 // quotes.js — 見積（定義書 No.5・新規テーブル）。商談配下、粗利は提案額・原価から自動計算。
 import { api, state, userName, master } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderQuotes() {
@@ -126,7 +126,7 @@ export function editQuote(quote, opps, presetOpp) {
 }
 
 function importExport(quotes) {
-  const cols = ['quoteNumber', 'opportunityId', 'contractId', 'status', 'validUntil', 'proposedAmount', 'costAmount', 'partnerCompany', 'ownerId', 'description'];
+  const cols = ['sfId', 'opportunitySfId', 'quoteNumber', 'opportunityId', 'contractId', 'status', 'validUntil', 'proposedAmount', 'costAmount', 'partnerCompany', 'ownerId', 'description'];
   const body = el('div');
   body.append(el('div.section-title', {}, 'エクスポート'), el('button.btn.secondary', { onclick: () => downloadCsv('quotes.csv', cols, quotes) }, '見積CSVをダウンロード'));
   body.append(el('hr.sep'), el('div.section-title', {}, 'インポート'), el('p.small.muted', {}, `ヘッダ: ${cols.join(', ')}（粗利は自動計算）`));
@@ -136,7 +136,7 @@ function importExport(quotes) {
   async function doImport() {
     const f = file.files[0]; if (!f) return toast('ファイルを選択してください', 'error');
     const rows = parseCsv(await f.text());
-    const r = await api.post('/api/import/quotes', { rows }); toast(`${r.created}件を取り込みました`, 'success'); m.close(); rerender();
+    const r = await api.post('/api/import/quotes', { rows }); toast(importMsg(r), 'success'); m.close(); rerender();
   }
 }
 

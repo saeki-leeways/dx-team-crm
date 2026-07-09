@@ -1,6 +1,6 @@
 // pipeline.js — 商談・パイプライン（FR-02-1..5・定義書 No.3）＋ 商談詳細（活動 No.4 / 見積 No.5 / 想定契約形態）
 import { api, state, userName, phaseByKey, contractTypeLabel, lossReasonLabel } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, man, yen, fmtDate } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, man, yen, fmtDate, importMsg } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 import { editQuote } from './quotes.js';
 
@@ -402,7 +402,7 @@ function addTask(o, refresh) {
 }
 
 function importExport(opps, accounts) {
-  const cols = ['name', 'accountId', 'entityId', 'phaseKey', 'ownerId', 'amount', 'expectedContractType', 'closeDate', 'valueChain', 'dxPhase'];
+  const cols = ['sfId', 'accountSfId', 'name', 'accountId', 'entityId', 'phaseKey', 'ownerId', 'amount', 'expectedContractType', 'closeDate', 'valueChain', 'dxPhase'];
   const rows = opps.map((o) => ({ ...o, valueChain: o.tags?.valueChain, dxPhase: o.tags?.dxPhase }));
   const body = el('div');
   body.append(el('div.section-title', {}, 'エクスポート'), el('button.btn.secondary', { onclick: () => downloadCsv('opportunities.csv', cols, rows) }, '商談CSVをダウンロード'));
@@ -413,7 +413,7 @@ function importExport(opps, accounts) {
   async function doImport() {
     const f = file.files[0]; if (!f) return toast('ファイルを選択してください', 'error');
     const rows = parseCsv(await f.text());
-    const r = await api.post('/api/import/opportunities', { rows }); toast(`${r.created}件を取り込みました`, 'success'); m.close(); rerender();
+    const r = await api.post('/api/import/opportunities', { rows }); toast(importMsg(r), 'success'); m.close(); rerender();
   }
 }
 

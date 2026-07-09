@@ -1,7 +1,7 @@
 // contacts_list.js — 取引先担当者の横断一覧（FR-01-2）。全取引先の担当者をまとめて表示・編集。
 import { api, state, userName } from '../api.js';
-import { el, clear, modal, toast, field, select, badge, confirmDialog, fmtDate } from '../ui.js';
-import { editContact, downloadCsv } from './accounts.js';
+import { el, clear, modal, toast, field, select, badge, confirmDialog, fmtDate, importMsg } from '../ui.js';
+import { editContact, downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderContactsList() {
   const [contacts, accounts] = await Promise.all([api.get('/api/contacts'), api.get('/api/accounts')]);
@@ -11,7 +11,7 @@ export async function renderContactsList() {
   root.append(el('div.spread.mb', {}, [
     el('div.muted.small', {}, `${contacts.length}名（全取引先の担当者）`),
     el('div.row', {}, [
-      el('button.btn.secondary.sm', { onclick: () => exportCsv(contacts, accById) }, '⇅ CSVエクスポート'),
+      el('button.btn.secondary.sm', { onclick: () => importExport(contacts, accById) }, '⇅ CSV入出力'),
       el('button.btn', { onclick: () => pickAccountThenAdd(accounts) }, '＋ 担当者を追加'),
     ]),
   ]));
@@ -71,10 +71,25 @@ function pickAccountThenAdd(accounts) {
   });
 }
 
-function exportCsv(contacts, accById) {
-  const cols = ['name', 'kana', 'accountName', 'department', 'title', 'decisionRole', 'email', 'phone', 'mobilePhone', 'leadSource', 'leadSourceDetail', 'leadDate', 'resignationDate', 'optOut'];
-  const rows = contacts.map((c) => ({ ...c, accountName: accById[c.accountId]?.name || '' }));
-  downloadCsv('contacts.csv', cols, rows);
+// CSV入出力（担当者）。取引先の紐付けは accountId / accountSfId / accountName で解決（§7）
+function importExport(contacts, accById) {
+  const cols = ['sfId', 'name', 'kana', 'accountId', 'accountSfId', 'accountName', 'department', 'title', 'decisionRole', 'email', 'phone', 'mobilePhone', 'leadSource', 'leadSourceDetail', 'leadDate', 'resignationDate', 'optOut', 'ownerEmail'];
+  const body = el('div');
+  body.append(el('div.section-title', {}, 'エクスポート'));
+  const exportRows = contacts.map((c) => ({ ...c, accountName: accById[c.accountId]?.name || '' }));
+  body.append(el('button.btn.secondary', { onclick: () => downloadCsv('contacts.csv', cols, exportRows) }, '担当者CSVをダウンロード'));
+  body.append(el('hr.sep'), el('div.section-title', {}, 'インポート'));
+  body.append(el('p.small.muted', {}, '取引先の紐付けは accountId / accountSfId / accountName のいずれかで解決。sfId があれば重複せず更新（アップサート）。'));
+  const file = el('input', { type: 'file', accept: '.csv' });
+  body.append(file);
+  const m = modal({ title: 'CSV入出力（担当者）', body, footer: [el('button.btn.ghost', { onclick: () => m.close() }, '閉じる'), el('button.btn', { onclick: doImport }, 'インポート実行')] });
+  async function doImport() {
+    const f = file.files[0]; if (!f) return toast('ファイルを選択してください', 'error');
+    try {
+      const r = await api.post('/api/import/contacts', { rows: parseCsv(await f.text()) });
+      toast(importMsg(r), 'success'); m.close(); rerender();
+    } catch (e) { toast(e.message, 'error'); }
+  }
 }
 
 function rerender() { window.dispatchEvent(new Event('hashchange')); }

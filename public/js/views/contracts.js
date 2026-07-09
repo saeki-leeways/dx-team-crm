@@ -1,6 +1,6 @@
 // contracts.js — 契約・更新管理（FR-03-1 登録 / FR-03-2 定期・分割 / FR-03-3 更新アラート）
 import { api, state, userName, entityName, contractTypeLabel } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderContracts() {
@@ -168,7 +168,7 @@ function editContract(contract, opps, accounts, contracts, parentContract) {
 }
 
 function importExport(contracts) {
-  const cols = ['name', 'managementNumber', 'accountId', 'entityId', 'opportunityId', 'parentId', 'ownerId', 'contractTypeId', 'startDate', 'endDate', 'cancellationDate', 'nextRenewalDecisionDate', 'salesRecordingMonth', 'nextBillingScheduledDate', 'billingType', 'monthlyAmount', 'monthlyGrossProfit', 'spotSales', 'spotGrossProfit', 'apiUsage', 'renewalAlertMonths', 'paymentTerms', 'status'];
+  const cols = ['sfId', 'accountSfId', 'name', 'managementNumber', 'accountId', 'entityId', 'opportunityId', 'parentId', 'ownerId', 'contractTypeId', 'startDate', 'endDate', 'cancellationDate', 'nextRenewalDecisionDate', 'salesRecordingMonth', 'nextBillingScheduledDate', 'billingType', 'monthlyAmount', 'monthlyGrossProfit', 'spotSales', 'spotGrossProfit', 'apiUsage', 'renewalAlertMonths', 'paymentTerms', 'status'];
   const body = el('div');
   body.append(el('div.section-title', {}, 'エクスポート'), el('button.btn.secondary', { onclick: () => downloadCsv('contracts.csv', cols, contracts) }, '契約CSVをダウンロード'));
   body.append(el('hr.sep'), el('div.section-title', {}, 'インポート'), el('p.small.muted', {}, `ヘッダ: ${cols.join(', ')}（name必須）`));
@@ -178,7 +178,7 @@ function importExport(contracts) {
   async function doImport() {
     const f = file.files[0]; if (!f) return toast('ファイルを選択してください', 'error');
     const rows = parseCsv(await f.text());
-    const r = await api.post('/api/import/contracts', { rows }); toast(`${r.created}件を取り込みました`, 'success'); m.close(); rerender();
+    const r = await api.post('/api/import/contracts', { rows }); toast(importMsg(r), 'success'); m.close(); rerender();
   }
 }
 

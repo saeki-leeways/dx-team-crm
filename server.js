@@ -748,77 +748,157 @@ api.put('/admin/masters', requireAdmin, (req, res) => {
 // 監査ログ（参考）
 api.get('/admin/audit', requireAdmin, (req, res) => res.json(db.get().auditLogs.slice(-200).reverse()));
 
-// インポート/エクスポート（FR-08-4）: CSVはフロントで生成/解析し、一括登録はここで受ける
+// インポート/エクスポート（FR-08-4 ＋ 移行拡張 §7）
+// 対応コレクション: accounts / contacts / opportunities / quotes / contracts / activities
+// 拡張: ①sfId保持と親参照の自動解決（sfId→内部ID、取引先は名称フォールバック）
+//       ②担当者・活動履歴のCSV取込 ③sfIdでアップサート（重複防止） ④owner(メール)/phase(Stage名)の値変換
 api.post('/import/:collection', (req, res) => {
   const d = db.get();
   const col = req.params.collection;
   const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
-  let created = 0;
+  const num = (v) => Number(v) || 0;
+  const bool = (v) => v === true || v === 'true' || v === '1' || v === 'TRUE';
+
+  // ---- 値解決ヘルパー ----
+  const resolveOwner = (r) => {
+    if (r.ownerId && d.users.some((u) => u.id === r.ownerId)) return r.ownerId;
+    if (r.ownerEmail) { const u = d.users.find((x) => x.email && x.email.toLowerCase() === String(r.ownerEmail).toLowerCase()); if (u) return u.id; }
+    if (r.ownerName) { const u = d.users.find((x) => x.name && (x.name.includes(r.ownerName) || r.ownerName.includes(x.name))); if (u) return u.id; }
+    return req.user.id;
+  };
+  const resolveAccountId = (r) => {
+    if (r.accountId && d.accounts.some((a) => a.id === r.accountId)) return r.accountId;
+    if (r.accountSfId) { const a = d.accounts.find((x) => x.sfId && x.sfId === r.accountSfId); if (a) return a.id; }
+    if (r.accountName) { const a = d.accounts.find((x) => x.name === r.accountName); if (a) return a.id; }
+    return r.accountId || null;
+  };
+  const resolveOppId = (r) => {
+    if (r.opportunityId && d.opportunities.some((o) => o.id === r.opportunityId)) return r.opportunityId;
+    if (r.opportunitySfId) { const o = d.opportunities.find((x) => x.sfId && x.sfId === r.opportunitySfId); if (o) return o.id; }
+    return r.opportunityId || null;
+  };
+  const resolveContractId = (r) => {
+    if (r.contractId && d.contracts.some((c) => c.id === r.contractId)) return r.contractId;
+    if (r.contractSfId) { const c = d.contracts.find((x) => x.sfId && x.sfId === r.contractSfId); if (c) return c.id; }
+    return r.contractId || null;
+  };
+  const resolveContactId = (r) => {
+    if (r.contactId && d.contacts.some((c) => c.id === r.contactId)) return r.contactId;
+    if (r.contactSfId) { const c = d.contacts.find((x) => x.sfId && x.sfId === r.contactSfId); if (c) return c.id; }
+    return r.contactId || null;
+  };
+  const resolvePhaseKey = (r) => {
+    if (r.phaseKey && d.phases.some((p) => p.key === r.phaseKey)) return r.phaseKey;
+    if (r.stageName) { const p = d.phases.find((x) => x.name === r.stageName); if (p) return p.key; }
+    return r.phaseKey || 'lead';
+  };
+
+  // sfId によるアップサート。fields は id/createdAt 以外の更新対象。
+  let created = 0, updated = 0, skipped = 0;
+  const upsert = (arr, prefix, sfId, fields) => {
+    const existing = sfId ? arr.find((x) => x.sfId && x.sfId === sfId) : null;
+    if (existing) {
+      Object.assign(existing, fields, { updatedAt: db.nowIso() });
+      updated += 1;
+      return existing;
+    }
+    const rec = { id: db.uid(prefix), sfId: sfId || null, createdAt: db.nowIso(), updatedAt: db.nowIso(), ...fields };
+    arr.push(rec);
+    created += 1;
+    return rec;
+  };
+
   if (col === 'accounts') {
     rows.forEach((r) => {
-      if (!r.name) return;
-      d.accounts.push({
-        id: db.uid('acc'), entityId: r.entityId || req.user.entityId, name: r.name, industry: r.industry || '',
+      if (!r.name && !r.sfId) { skipped += 1; return; }
+      upsert(d.accounts, 'acc', r.sfId, {
+        entityId: r.entityId || req.user.entityId, name: r.name || '', industry: r.industry || '',
         industryLarge: r.industryLarge || '', industryMedium: r.industryMedium || '', targetCategory: r.targetCategory || '',
-        website: r.website || '', domain: r.domain || '', employees: Number(r.employees) || 0, capital: Number(r.capital) || 0,
-        postalCode: r.postalCode || '', parentId: r.parentId || null, address: r.address || '',
-        ownerId: r.ownerId || req.user.id, note: r.note || '', createdAt: db.nowIso(), updatedAt: db.nowIso(),
+        website: r.website || '', domain: r.domain || '', employees: num(r.employees), capital: num(r.capital),
+        postalCode: r.postalCode || '', address: r.address || '', ownerId: resolveOwner(r), note: r.note || '',
       });
-      created += 1;
+    });
+    // 親会社の解決（全件投入後に parentSfId / parentName / parentId から）
+    rows.forEach((r) => {
+      const self = r.sfId ? d.accounts.find((a) => a.sfId === r.sfId) : d.accounts.find((a) => a.name === r.name);
+      if (!self) return;
+      let parent = null;
+      if (r.parentId) parent = d.accounts.find((a) => a.id === r.parentId);
+      if (!parent && r.parentSfId) parent = d.accounts.find((a) => a.sfId === r.parentSfId);
+      if (!parent && r.parentName) parent = d.accounts.find((a) => a.name === r.parentName);
+      self.parentId = parent ? parent.id : (self.parentId || null);
+    });
+  } else if (col === 'contacts') {
+    rows.forEach((r) => {
+      const accountId = resolveAccountId(r);
+      if (!accountId || (!r.name && !r.sfId)) { skipped += 1; return; }
+      upsert(d.contacts, 'con', r.sfId, {
+        accountId, name: r.name || '', kana: r.kana || '', title: r.title || '', department: r.department || '',
+        decisionRole: r.decisionRole || '', email: r.email || '', phone: r.phone || '', mobilePhone: r.mobilePhone || '',
+        resignationDate: r.resignationDate || '', optOut: bool(r.optOut),
+        leadSource: r.leadSource || '', leadSourceDetail: r.leadSourceDetail || '', leadDate: r.leadDate || '',
+        ownerId: resolveOwner(r), transfers: Array.isArray(r.transfers) ? r.transfers : [], note: r.note || '',
+      });
     });
   } else if (col === 'opportunities') {
     rows.forEach((r) => {
-      if (!r.name) return;
-      const o = {
-        id: db.uid('opp'), entityId: r.entityId || req.user.entityId, accountId: r.accountId || null, contactId: r.contactId || null,
-        name: r.name, ownerId: r.ownerId || req.user.id, phaseKey: r.phaseKey || 'lead', amount: Number(r.amount) || 0,
-        probabilityOverride: r.probabilityOverride ? Number(r.probabilityOverride) : null,
-        budget: Number(r.budget) || 0, projectStartDate: r.projectStartDate || '', issues: r.issues || '',
-        proposedAmount: Number(r.proposedAmount) || 0, costAmount: Number(r.costAmount) || 0, partnerCompany: r.partnerCompany || '',
-        expectedContractType: r.expectedContractType || '', expectedPeriodMonths: Number(r.expectedPeriodMonths) || 0,
-        expectedStructure: r.expectedStructure || '', closeDate: r.closeDate || '', createdAt: db.nowIso(), phaseChangedAt: db.nowIso(), updatedAt: db.nowIso(),
+      if (!r.name && !r.sfId) { skipped += 1; return; }
+      const proposedAmount = num(r.proposedAmount), costAmount = num(r.costAmount);
+      upsert(d.opportunities, 'opp', r.sfId, {
+        entityId: r.entityId || req.user.entityId, accountId: resolveAccountId(r), contactId: resolveContactId(r),
+        name: r.name || '', ownerId: resolveOwner(r), phaseKey: resolvePhaseKey(r), amount: num(r.amount),
+        probabilityOverride: r.probabilityOverride ? num(r.probabilityOverride) : null,
+        budget: num(r.budget), projectStartDate: r.projectStartDate || '', issues: r.issues || '',
+        proposedAmount, costAmount, ...db.gross(proposedAmount, costAmount), partnerCompany: r.partnerCompany || '',
+        expectedContractType: r.expectedContractType || '', expectedPeriodMonths: num(r.expectedPeriodMonths),
+        expectedStructure: r.expectedStructure || '', closeDate: r.closeDate || '', phaseChangedAt: db.nowIso(),
         bant: { budget: '', authority: '', need: '', timeline: '' }, nextAction: '', nextActionDue: '',
         lossReasonId: null, lossNote: '', competitor: '', status: 'open', tags: { valueChain: r.valueChain || '', dxPhase: r.dxPhase || '' },
-      };
-      Object.assign(o, db.gross(o.proposedAmount, o.costAmount));
-      d.opportunities.push(o);
-      created += 1;
+      });
     });
   } else if (col === 'quotes') {
     rows.forEach((r) => {
-      if (!r.quoteNumber && !r.opportunityId) return;
-      const q = {
-        id: db.uid('qt'), entityId: r.entityId || req.user.entityId, opportunityId: r.opportunityId || null, contractId: r.contractId || null,
-        ownerId: r.ownerId || req.user.id, quoteNumber: r.quoteNumber || '', validUntil: r.validUntil || '', status: r.status || '作成中',
-        description: r.description || '', proposedAmount: Number(r.proposedAmount) || 0, costAmount: Number(r.costAmount) || 0,
-        partnerCompany: r.partnerCompany || '', createdAt: db.nowIso(), updatedAt: db.nowIso(),
-      };
-      Object.assign(q, db.gross(q.proposedAmount, q.costAmount));
-      d.quotes.push(q);
-      created += 1;
+      if (!r.quoteNumber && !r.opportunitySfId && !r.opportunityId && !r.sfId) { skipped += 1; return; }
+      const proposedAmount = num(r.proposedAmount), costAmount = num(r.costAmount);
+      upsert(d.quotes, 'qt', r.sfId, {
+        entityId: r.entityId || req.user.entityId, opportunityId: resolveOppId(r), contractId: resolveContractId(r),
+        ownerId: resolveOwner(r), quoteNumber: r.quoteNumber || '', validUntil: r.validUntil || '', status: r.status || '作成中',
+        description: r.description || '', proposedAmount, costAmount, ...db.gross(proposedAmount, costAmount),
+        partnerCompany: r.partnerCompany || '',
+      });
     });
   } else if (col === 'contracts') {
     rows.forEach((r) => {
-      if (!r.name) return;
-      const ma = Number(r.monthlyAmount) || Number(r.monthlySales) || 0;
-      d.contracts.push({
-        id: db.uid('ctr'), entityId: r.entityId || req.user.entityId, accountId: r.accountId || null,
-        opportunityId: r.opportunityId || null, parentId: r.parentId || null, name: r.name, managementNumber: r.managementNumber || '',
+      if (!r.name && !r.sfId) { skipped += 1; return; }
+      const ma = num(r.monthlyAmount) || num(r.monthlySales);
+      upsert(d.contracts, 'ctr', r.sfId, {
+        entityId: r.entityId || req.user.entityId, accountId: resolveAccountId(r), opportunityId: resolveOppId(r),
+        parentId: r.parentId || null, name: r.name || '', managementNumber: r.managementNumber || '',
         contractTypeId: r.contractTypeId || '', startDate: r.startDate || '', endDate: r.endDate || '', cancellationDate: r.cancellationDate || '',
         nextRenewalDecisionDate: r.nextRenewalDecisionDate || '', salesRecordingMonth: r.salesRecordingMonth || '',
-        nextBillingScheduledDate: r.nextBillingScheduledDate || '', apiUsage: r.apiUsage === 'true' || r.apiUsage === true,
-        billingType: r.billingType || 'monthly', monthlyAmount: ma, monthlySales: Number(r.monthlySales) || ma,
-        monthlyGrossProfit: Number(r.monthlyGrossProfit) || 0, spotSales: Number(r.spotSales) || 0, spotGrossProfit: Number(r.spotGrossProfit) || 0,
-        paymentTerms: r.paymentTerms || '', renewalAlertMonths: Number(r.renewalAlertMonths) || 2,
-        autoRenew: false, status: r.status || 'active', ownerId: r.ownerId || req.user.id, note: r.note || '', createdAt: db.nowIso(), updatedAt: db.nowIso(),
+        nextBillingScheduledDate: r.nextBillingScheduledDate || '', apiUsage: bool(r.apiUsage),
+        billingType: r.billingType || 'monthly', monthlyAmount: ma, monthlySales: num(r.monthlySales) || ma,
+        monthlyGrossProfit: num(r.monthlyGrossProfit), spotSales: num(r.spotSales), spotGrossProfit: num(r.spotGrossProfit),
+        paymentTerms: r.paymentTerms || '', renewalAlertMonths: num(r.renewalAlertMonths) || 2,
+        autoRenew: false, status: r.status || 'active', ownerId: resolveOwner(r), note: r.note || '',
       });
-      created += 1;
+    });
+  } else if (col === 'activities') {
+    rows.forEach((r) => {
+      const opportunityId = resolveOppId(r);
+      if (!opportunityId && !r.sfId) { skipped += 1; return; }
+      const ownerId = resolveOwner(r);
+      upsert(d.activities, 'act', r.sfId, {
+        opportunityId, quoteId: resolveContractId(r) ? null : (r.quoteId || null), contractId: resolveContractId(r),
+        userId: ownerId, ownerId, type: r.type || '商談', subject: r.subject || '',
+        date: r.date || db.nowIso().slice(0, 10), memo: r.memo || r.description || '',
+      });
     });
   } else {
     return res.status(400).json({ error: '未対応のコレクションです' });
   }
-  audit(req.user, 'import', col, `${created}件`); db.save();
-  res.json({ created });
+  audit(req.user, 'import', col, `新規${created} 更新${updated} スキップ${skipped}`); db.save();
+  res.json({ created, updated, skipped });
 });
 
 function pick(obj, keys) {

@@ -1,6 +1,7 @@
 // tasks.js — 活動・タスク管理（FR-04-3 タスク・リマインド / 放置案件アラート）
 import { api, state, userName } from '../api.js';
-import { el, clear, modal, toast, field, input, select, badge, confirmDialog, fmtDate } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, badge, confirmDialog, fmtDate, importMsg } from '../ui.js';
+import { parseCsv } from './accounts.js';
 
 let filter = 'open';
 
@@ -15,7 +16,10 @@ export async function renderTasks() {
     el('div.pill-tabs', { style: 'margin:0' }, [
       ftab('未完了', 'open'), ftab('期限超過', 'overdue'), ftab('完了済', 'done'), ftab('すべて', 'all'),
     ]),
-    el('button.btn', { onclick: () => editTask(null, opps) }, '＋ タスクを追加'),
+    el('div.row', {}, [
+      el('button.btn.secondary.sm', { onclick: () => importActivities(opps) }, '⇅ 活動履歴CSVインポート'),
+      el('button.btn', { onclick: () => editTask(null, opps) }, '＋ タスクを追加'),
+    ]),
   ]));
 
   // 放置案件アラート
@@ -78,6 +82,25 @@ function editTask(task, opps) {
       if (task) await api.put(`/api/tasks/${tk.id}`, d);
       else await api.post('/api/tasks', d);
       toast('保存しました', 'success'); m.close(); rerender();
+    } catch (e) { toast(e.message, 'error'); }
+  }
+}
+
+// 活動履歴CSVインポート（§7）。商談の紐付けは opportunityId / opportunitySfId で解決。
+function importActivities(opps) {
+  const cols = ['sfId', 'opportunityId', 'opportunitySfId', 'type', 'subject', 'date', 'memo', 'ownerEmail'];
+  const body = el('div');
+  body.append(el('div.section-title', {}, '活動履歴のインポート'));
+  body.append(el('p.small.muted', {}, `ヘッダ例: ${cols.join(', ')}`));
+  body.append(el('p.small.muted', {}, '商談の紐付けは opportunityId（本CRMの内部ID）または opportunitySfId（SalesforceのID）で解決。sfId があれば重複せず更新。'));
+  const file = el('input', { type: 'file', accept: '.csv' });
+  body.append(file);
+  const m = modal({ title: 'CSV入出力（活動履歴）', body, footer: [el('button.btn.ghost', { onclick: () => m.close() }, '閉じる'), el('button.btn', { onclick: doImport }, 'インポート実行')] });
+  async function doImport() {
+    const f = file.files[0]; if (!f) return toast('ファイルを選択してください', 'error');
+    try {
+      const r = await api.post('/api/import/activities', { rows: parseCsv(await f.text()) });
+      toast(importMsg(r), 'success'); m.close(); rerender();
     } catch (e) { toast(e.message, 'error'); }
   }
 }

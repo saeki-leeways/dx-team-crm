@@ -126,6 +126,11 @@ export function fmtDate(s) { return s ? String(s).slice(0, 10) : '—'; }
 
 export function badge(text, color = 'gray') { return el('span.badge.' + color, {}, text); }
 
+// インポート結果メッセージ（新規/更新/スキップ）
+export function importMsg(r) {
+  return `取込完了: 新規${r.created || 0}件 / 更新${r.updated || 0}件 / スキップ${r.skipped || 0}件`;
+}
+
 // ---- 一覧テーブルの列幅リサイズ（各thの右端をドラッグ。隣接列と相互調整で合計幅を維持） ----
 export function makeTablesResizable(root) {
   root.querySelectorAll('table').forEach((table) => {
