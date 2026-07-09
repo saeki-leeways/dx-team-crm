@@ -366,6 +366,17 @@ api.post('/opportunities/:id/activities', (req, res) => {
   d.activities.push(act); db.save();
   res.json(act);
 });
+api.put('/activities/:id', (req, res) => {
+  const d = db.get();
+  const act = d.activities.find((a) => a.id === req.params.id);
+  if (!act) return res.status(404).json({ error: '対象が見つかりません' });
+  const opp = d.opportunities.find((o) => o.id === act.opportunityId);
+  if (opp && !oppVisible(req.user, opp)) return res.status(403).json({ error: '権限がありません' });
+  Object.assign(act, pick(req.body, ['type', 'subject', 'date', 'memo', 'ownerId', 'quoteId', 'contractId']));
+  act.updatedAt = db.nowIso();
+  db.save();
+  res.json(act);
+});
 api.delete('/activities/:id', (req, res) => {
   const d = db.get();
   const act = d.activities.find((a) => a.id === req.params.id);

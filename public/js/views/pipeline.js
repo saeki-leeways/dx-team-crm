@@ -180,13 +180,16 @@ async function openOpp(o, accounts) {
 
   // 活動履歴（FR-04-1・定義書 No.4）
   body.append(el('hr.sep'));
-  body.append(el('div.spread.mb', {}, [el('div.section-title', {}, `活動履歴（${activities.length}件）`), el('button.btn.sm', { onclick: () => addActivity(o, quotes, () => reopen()) }, '＋ 活動を記録')]));
+  body.append(el('div.spread.mb', {}, [el('div.section-title', {}, `活動履歴（${activities.length}件）`), el('button.btn.sm', { onclick: () => activityForm(o, quotes, () => reopen()) }, '＋ 活動を記録')]));
   if (activities.length === 0) body.append(el('div.empty', {}, '活動記録がありません'));
   else activities.forEach((a) => {
     body.append(el('div.card', { style: 'padding:10px;margin-bottom:6px' }, [
       el('div.spread', {}, [
         el('div', {}, [badge(a.type, 'gray'), a.subject ? el('strong', { style: 'margin-left:6px' }, a.subject) : null, ` 　${fmtDate(a.date)} ｜ `, el('span.muted', {}, userName(a.ownerId || a.userId))]),
-        el('button.btn.ghost.sm', { onclick: () => confirmDialog('この活動記録を削除しますか？', async () => { await api.del(`/api/activities/${a.id}`); toast('削除しました'); reopen(); }) }, '×'),
+        el('div.row', {}, [
+          el('button.btn.ghost.sm', { onclick: () => activityForm(o, quotes, () => reopen(), a) }, '編集'),
+          el('button.btn.ghost.sm', { onclick: () => confirmDialog('この活動記録を削除しますか？', async () => { await api.del(`/api/activities/${a.id}`); toast('削除しました'); reopen(); }) }, '×'),
+        ]),
       ]),
       el('div', { style: 'margin-top:4px;white-space:pre-wrap' }, a.memo),
     ]));
@@ -358,17 +361,30 @@ function openLose(o) {
   }
 }
 
-function addActivity(o, quotes, refresh) {
+// 活動の記録／編集（activity を渡すと編集モード）
+function activityForm(o, quotes, refresh, activity) {
+  const a = activity || {};
   const form = el('div');
-  form.append(field('種別', select('type', ['商談', '電話', 'メール', 'オンライン会議', 'その他'], '商談')));
-  form.append(field('件名', input('subject', '')));
-  form.append(field('日付', input('date', new Date().toISOString().slice(0, 10), { type: 'date' })));
-  if (quotes && quotes.length) form.append(field('関連見積（任意）', select('quoteId', [{ value: '', label: '（なし）' }, ...quotes.map((q) => ({ value: q.id, label: q.quoteNumber || q.id }))], '')));
-  form.append(field('内容・議事録', textarea('memo', '', 5)));
-  const m = modal({ title: '活動を記録', body: form, footer: [el('button.btn.ghost', { onclick: () => m.close() }, 'キャンセル'), el('button.btn', { onclick: save }, '記録')] });
+  const typeBase = ['商談', '電話', 'メール', 'オンライン会議', '進捗', '提案', '新提案', 'その他'];
+  if (a.type && !typeBase.includes(a.type)) typeBase.unshift(a.type); // 既存のカスタム種別を保持
+  const ownerOpts = state.me.users.map((u) => ({ value: u.id, label: u.name }));
+  form.append(field('種別', select('type', typeBase, a.type || '商談')));
+  form.append(field('件名', input('subject', a.subject || '')));
+  form.append(field('日付', input('date', a.date || new Date().toISOString().slice(0, 10), { type: 'date' })));
+  form.append(field('担当', select('ownerId', ownerOpts, a.ownerId || a.userId || state.me.user.id)));
+  if (quotes && quotes.length) form.append(field('関連見積（任意）', select('quoteId', [{ value: '', label: '（なし）' }, ...quotes.map((q) => ({ value: q.id, label: q.quoteNumber || q.id }))], a.quoteId || '')));
+  form.append(field('内容・議事録', textarea('memo', a.memo || '', 5)));
+  const m = modal({
+    title: activity ? '活動を編集' : '活動を記録', body: form,
+    footer: [el('button.btn.ghost', { onclick: () => m.close() }, 'キャンセル'), el('button.btn', { onclick: save }, '保存')],
+  });
   async function save() {
     const d = collectForm(form);
-    await api.post(`/api/opportunities/${o.id}/activities`, d); toast('記録しました', 'success'); m.close(); refresh();
+    try {
+      if (activity) await api.put(`/api/activities/${a.id}`, d);
+      else await api.post(`/api/opportunities/${o.id}/activities`, d);
+      toast('保存しました', 'success'); m.close(); refresh();
+    } catch (e) { toast(e.message, 'error'); }
   }
 }
 
