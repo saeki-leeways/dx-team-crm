@@ -3,6 +3,7 @@ import { state, login, logout, bootstrap, isAdmin } from './api.js';
 import { el, clear, toast, field, input, makeTablesResizable } from './ui.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderAccounts } from './views/accounts.js';
+import { renderContactsList } from './views/contacts_list.js';
 import { renderPipeline } from './views/pipeline.js';
 import { renderQuotes } from './views/quotes.js';
 import { renderContracts } from './views/contracts.js';
@@ -13,7 +14,8 @@ import { ICONS } from './icons.js';
 
 const ROUTES = [
   { id: 'dashboard', label: 'ダッシュボード', ico: ICONS.dashboard, render: renderDashboard },
-  { id: 'accounts', label: '取引先・担当者', ico: ICONS.accounts, render: renderAccounts },
+  { id: 'accounts', label: '取引先', ico: ICONS.accounts, render: renderAccounts },
+  { id: 'contacts', label: '取引先担当者', ico: ICONS.contacts, render: renderContactsList },
   { id: 'pipeline', label: '商談・パイプライン', ico: ICONS.pipeline, render: renderPipeline },
   { id: 'quotes', label: '見積', ico: ICONS.quotes, render: renderQuotes },
   { id: 'contracts', label: '契約・更新', ico: ICONS.contracts, render: renderContracts },

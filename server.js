@@ -198,7 +198,13 @@ api.delete('/accounts/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- キーパーソン（FR-01-2） ----------
+// ---------- 取引先担当者（FR-01-2） ----------
+// 全担当者（可視な取引先配下のみ）
+api.get('/contacts', (req, res) => {
+  const d = db.get();
+  const accIds = new Set(d.accounts.filter((a) => accountVisible(req.user, a)).map((a) => a.id));
+  res.json(d.contacts.filter((c) => accIds.has(c.accountId)));
+});
 api.get('/accounts/:id/contacts', (req, res) => {
   const d = db.get();
   const acc = d.accounts.find((a) => a.id === req.params.id);

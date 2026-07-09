@@ -117,7 +117,7 @@ function renderContacts(container, acc, contacts, refresh) {
   });
 }
 
-function editContact(acc, contact, refresh) {
+export function editContact(acc, contact, refresh) {
   const c = contact || {};
   const form = el('div.form-grid');
   const ownerOpts = state.me.users.map((u) => ({ value: u.id, label: u.name }));
