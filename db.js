@@ -14,6 +14,10 @@
 const fs = require('fs');
 const path = require('path');
 
+// 業種カテゴリ（中）の追加リスト。単一の情報源として data/industry_medium.json を共用する
+// （seed と scripts/update_industry_medium.js の両方から参照）
+const INDUSTRY_MEDIUM_EXTRA = require('./data/industry_medium.json');
+
 const DATA_FILE = path.join(__dirname, 'data.json');
 const REDIS_KEY = 'crm:data:v1';
 
@@ -156,7 +160,7 @@ function seed() {
     // 定義書 No.1〜6 由来の追加マスタ
     targetCategories: ['既存顧客', '新規開拓', '休眠', 'パートナー経由', 'インバウンド'],
     industryLarge: ['製造業', '情報通信業', '卸売・小売業', '金融・保険業', '医療・福祉', '建設業', 'サービス業', '公務', 'その他'],
-    industryMedium: ['電機・精密', '自動車・輸送', '素材・化学', 'ソフトウェア', '通信キャリア', '銀行', '証券・保険', '小売チェーン', '物流', '病院・製薬', 'その他'],
+    industryMedium: ['電機・精密', '自動車・輸送', '素材・化学', 'ソフトウェア', '通信キャリア', '銀行', '証券・保険', '小売チェーン', '物流', '病院・製薬', 'その他', ...INDUSTRY_MEDIUM_EXTRA],
     leadSources: ['Webサイト', '展示会・セミナー', '紹介・リファラル', 'アウトバウンド', '既存顧客深耕', 'パートナー', 'その他'],
     quoteStatuses: ['作成中', '提出済', '承認', '却下', '失注'],
   };
