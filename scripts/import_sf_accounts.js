@@ -7,6 +7,7 @@
  *   APP_PASSWORD='共有PW' node scripts/import_sf_accounts.js "<パス>"  … 本番(dx-team-crm)へ取込
  *
  * 任意: LIMIT=20 で先頭N件のみ / LOGIN_EMAIL=admin@example.com
+ *       OWNER_NAME='佐伯 知昭'（既定）… 取込む取引先の自社担当。OWNER_EMAIL指定も可
  */
 const fs = require('fs');
 
@@ -82,6 +83,21 @@ if (DRY) { console.log('\n[DRY] 取込は行いません。'); process.exit(0); 
   if (!lg.ok) { console.error(`❌ ログイン失敗 ${lg.status}`, (await lg.json().catch(() => ({}))).error || ''); process.exit(1); }
   const { token, user } = await lg.json();
   console.log(`\n✓ ログイン: ${user.name}（${BASE}）`);
+
+  // 自社担当（佐伯 知昭）を本CRMユーザーから解決し、全件に割当
+  const OWNER_NAME = process.env.OWNER_NAME || '佐伯 知昭';
+  const OWNER_EMAIL = process.env.OWNER_EMAIL || '';
+  const norm = (s) => (s || '').replace(/\s/g, '');
+  const me = await (await fetch(`${BASE}/api/me`, { headers: { Authorization: 'Bearer ' + token } })).json();
+  const users = me.users || [];
+  let owner = null;
+  if (OWNER_EMAIL) owner = users.find((u) => u.email && u.email.toLowerCase() === OWNER_EMAIL.toLowerCase());
+  if (!owner) owner = users.find((u) => norm(u.name) === norm(OWNER_NAME));
+  if (!owner) owner = users.find((u) => norm(u.name).includes(norm(OWNER_NAME)) || norm(OWNER_NAME).includes(norm(u.name)));
+  if (!owner) owner = users.find((u) => u.name && u.name.includes('佐伯'));
+  if (owner) { mapped.forEach((r) => { r.ownerId = owner.id; }); console.log(`  担当: ${owner.name} を全 ${mapped.length} 件に割当`); }
+  else console.warn(`  ⚠️ 担当「${OWNER_NAME}」が見つかりません。ログインユーザー(${user.name})が担当になります。管理画面でユーザーを作成してください。`);
+
   const r = await fetch(`${BASE}/api/import/accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ rows: mapped }) });
   const out = await r.json();
   console.log('取込結果:', JSON.stringify(out));
