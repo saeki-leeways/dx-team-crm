@@ -150,6 +150,7 @@ export function makeTablesResizable(root) {
     };
     ths.forEach((th, i) => {
       if (i === ths.length - 1) return; // 最終列の右端は不要
+      if (th.classList.contains('sel-col')) return; // 選択チェック列はリサイズ不要
       th.style.position = 'relative';
       const grip = el('div.col-resizer');
       let startX, startW;
@@ -171,4 +172,55 @@ export function makeTablesResizable(root) {
       th.appendChild(grip);
     });
   });
+}
+
+// ---- 一覧の複数選択＋一括削除 ----
+// table: 対象テーブル（tbody各行に dataset.id を設定しておく）
+// onDelete(ids): 選択IDの削除処理（api呼び出し＋再描画）を呼び出し側で実装
+export function enableBulkDelete(table, { onDelete, noun = '件' }) {
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+  const allTr = Array.from(tbody.querySelectorAll('tr'));
+  const dataRows = allTr.filter((tr) => tr.dataset && tr.dataset.id);
+  if (dataRows.length === 0) return;
+  const selected = new Set();
+
+  const countEl = el('span.small', {}, '0件を選択中');
+  const clearBtn = el('button.btn.ghost.sm', { onclick: () => { setAll(false); } }, '選択解除');
+  const delBtn = el('button.btn.danger.sm', {
+    onclick: () => {
+      if (!selected.size) return;
+      confirmDialog(`選択した ${selected.size}${noun} を削除します。元に戻せません。よろしいですか？`, async () => { await onDelete([...selected]); });
+    },
+  }, '🗑 選択を一括削除');
+  const bar = el('div.bulk-bar', {}, [countEl, el('div.row', {}, [clearBtn, delBtn])]);
+  bar.style.display = 'none';
+  table.parentElement && table.parentElement.insertBefore(bar, table);
+
+  const allCb = el('input', { type: 'checkbox' });
+  const sync = () => {
+    countEl.textContent = `${selected.size}${noun}を選択中`;
+    bar.style.display = selected.size ? 'flex' : 'none';
+    allCb.checked = selected.size === dataRows.length;
+    allCb.indeterminate = selected.size > 0 && selected.size < dataRows.length;
+  };
+  const setRow = (tr, on) => {
+    const cb = tr.querySelector('.row-sel');
+    if (cb) cb.checked = on;
+    tr.classList.toggle('row-selected', on);
+    if (on) selected.add(tr.dataset.id); else selected.delete(tr.dataset.id);
+  };
+  const setAll = (on) => { dataRows.forEach((tr) => setRow(tr, on)); sync(); };
+
+  allCb.addEventListener('change', () => setAll(allCb.checked));
+  const headRow = table.querySelector('thead tr');
+  if (headRow) headRow.insertBefore(el('th.sel-col', {}, allCb), headRow.firstChild);
+
+  dataRows.forEach((tr) => {
+    const cb = el('input.row-sel', { type: 'checkbox' });
+    cb.addEventListener('change', () => { setRow(tr, cb.checked); sync(); });
+    tr.insertBefore(el('td.sel-col', {}, cb), tr.firstChild);
+  });
+  // データ行以外（合計行など）は列ズレ防止に空セルを先頭へ
+  allTr.filter((tr) => !dataRows.includes(tr)).forEach((tr) => tr.insertBefore(el('td.sel-col'), tr.firstChild));
 }

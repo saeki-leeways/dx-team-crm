@@ -1,6 +1,6 @@
 // tasks.js — 活動・タスク管理（FR-04-3 タスク・リマインド / 放置案件アラート）
-import { api, state, userName } from '../api.js';
-import { el, clear, modal, toast, field, input, select, badge, confirmDialog, fmtDate, importMsg } from '../ui.js';
+import { api, state, userName, bulkDelete } from '../api.js';
+import { el, clear, modal, toast, field, input, select, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
 import { parseCsv } from './accounts.js';
 
 let filter = 'open';
@@ -46,7 +46,7 @@ export async function renderTasks() {
     const overdue = !tk.done && tk.dueDate && tk.dueDate < today;
     const cb = el('input', { type: 'checkbox', checked: tk.done, style: 'width:auto' });
     cb.addEventListener('change', async () => { await api.put(`/api/tasks/${tk.id}`, { done: cb.checked }); toast('更新しました', 'success'); rerender(); });
-    tb.append(el('tr', {}, [
+    tb.append(el('tr', { dataset: { id: tk.id } }, [
       el('td', {}, cb),
       el('td', { style: tk.done ? 'text-decoration:line-through;color:var(--muted)' : '' }, tk.title),
       el('td', {}, opp ? el('a', { href: '#pipeline' }, opp.name) : '—'),
@@ -58,7 +58,9 @@ export async function renderTasks() {
       ])),
     ]));
   });
-  t.append(tb); card.append(t); root.append(card);
+  t.append(tb); card.append(t);
+  enableBulkDelete(t, { noun: '件', onDelete: async (ids) => { const r = await bulkDelete('/api/tasks', ids); toast(`${r.ok}件を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  root.append(card);
   return root;
 
   function ftab(label, key) { return el('button', { class: filter === key ? 'active' : '', onclick: () => { filter = key; rerender(); } }, label); }

@@ -1,6 +1,6 @@
 // pipeline.js — 商談・パイプライン（FR-02-1..5・定義書 No.3）＋ 商談詳細（活動 No.4 / 見積 No.5 / 想定契約形態）
-import { api, state, userName, phaseByKey, contractTypeLabel, lossReasonLabel } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, man, yen, fmtDate, importMsg } from '../ui.js';
+import { api, state, userName, phaseByKey, contractTypeLabel, lossReasonLabel, bulkDelete } from '../api.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, man, yen, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 import { editQuote } from './quotes.js';
 
@@ -90,7 +90,7 @@ function renderList(opps, accounts) {
     const acc = accounts.find((a) => a.id === o.accountId);
     const ph = phaseByKey(o.phaseKey);
     const prob = o.probabilityOverride != null ? o.probabilityOverride : (ph?.probability || 0);
-    tb.append(el('tr', {}, [
+    tb.append(el('tr', { dataset: { id: o.id } }, [
       el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); openOpp(o, accounts); } }, o.name)),
       el('td', {}, acc ? acc.name : '—'),
       el('td', {}, badge(ph ? ph.name : o.phaseKey, ph && ph.isLost ? 'red' : ph && ph.isWon ? 'green' : 'blue')),
@@ -101,6 +101,7 @@ function renderList(opps, accounts) {
     ]));
   });
   t.append(tb); card.append(t);
+  enableBulkDelete(t, { noun: '件', onDelete: async (ids) => { const r = await bulkDelete('/api/opportunities', ids); toast(`${r.ok}件を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
   return card;
 }
 

@@ -1,6 +1,6 @@
 // accounts.js — 取引先マスタ（FR-01-1・定義書 No.1／グループ階層 D3）＋ 担当者（FR-01-2・定義書 No.2）
-import { api, state, userName, entityName, master } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, fmtDate, importMsg } from '../ui.js';
+import { api, state, userName, entityName, master, bulkDelete } from '../api.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
 
 export async function renderAccounts() {
   const accounts = await api.get('/api/accounts');
@@ -28,7 +28,7 @@ export async function renderAccounts() {
     if (rendered.has(acc.id)) return;
     rendered.add(acc.id);
     const contactCount = acc._contactCount;
-    tbody.append(el('tr', {}, [
+    tbody.append(el('tr', { dataset: { id: acc.id } }, [
       el('td', {}, [
         depth > 0 ? el('span.hierarchy-indent', {}, '　'.repeat(depth) + '└ ') : null,
         el('a', { href: '#', onclick: (e) => { e.preventDefault(); openAccount(acc, accounts); } }, acc.name),
@@ -49,6 +49,7 @@ export async function renderAccounts() {
   table.append(tbody);
   card.append(table);
   if (accounts.length === 0) { clear(card); card.append(el('div.empty', {}, '取引先がありません。「取引先を追加」から登録してください。')); }
+  else enableBulkDelete(table, { noun: '社', onDelete: async (ids) => { const r = await bulkDelete('/api/accounts', ids); toast(`${r.ok}社を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
   root.append(card);
   return root;
 }

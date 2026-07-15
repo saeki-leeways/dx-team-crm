@@ -1,6 +1,6 @@
 // contacts_list.js — 取引先担当者の横断一覧（FR-01-2）。全取引先の担当者をまとめて表示・編集。
-import { api, state, userName } from '../api.js';
-import { el, clear, modal, toast, field, select, badge, confirmDialog, fmtDate, importMsg } from '../ui.js';
+import { api, state, userName, bulkDelete } from '../api.js';
+import { el, clear, modal, toast, field, select, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
 import { editContact, downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderContactsList() {
@@ -31,7 +31,7 @@ export async function renderContactsList() {
     return an.localeCompare(bn, 'ja');
   }).forEach((c) => {
     const acc = accById[c.accountId];
-    tb.append(el('tr', {}, [
+    tb.append(el('tr', { dataset: { id: c.id } }, [
       el('td', {}, [
         el('a', { href: '#', onclick: (e) => { e.preventDefault(); openEdit(c, acc); } }, c.name),
         c.kana ? el('span.muted.small', {}, ` (${c.kana})`) : null,
@@ -50,7 +50,9 @@ export async function renderContactsList() {
       ])),
     ]));
   });
-  t.append(tb); card.append(t); root.append(card);
+  t.append(tb); card.append(t);
+  enableBulkDelete(t, { noun: '名', onDelete: async (ids) => { const r = await bulkDelete('/api/contacts', ids); toast(`${r.ok}名を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  root.append(card);
   return root;
 
   function openEdit(contact, acc) {

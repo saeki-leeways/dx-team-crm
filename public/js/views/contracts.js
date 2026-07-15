@@ -1,6 +1,6 @@
 // contracts.js — 契約・更新管理（FR-03-1 登録 / FR-03-2 定期・分割 / FR-03-3 更新アラート）
-import { api, state, userName, entityName, contractTypeLabel } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg } from '../ui.js';
+import { api, state, userName, entityName, contractTypeLabel, bulkDelete } from '../api.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderContracts() {
@@ -41,7 +41,7 @@ export async function renderContracts() {
   const add = (c, depth) => {
     if (done.has(c.id)) return; done.add(c.id);
     const acc = accounts.find((a) => a.id === c.accountId);
-    tb.append(el('tr', {}, [
+    tb.append(el('tr', { dataset: { id: c.id } }, [
       el('td', {}, [depth ? el('span.hierarchy-indent', {}, '　'.repeat(depth) + '└ ') : null, el('a', { href: '#', onclick: (e) => { e.preventDefault(); openContract(c, opps, accounts, contracts); } }, c.name)]),
       el('td', {}, acc ? acc.name : '—'),
       el('td', {}, contractTypeLabel(c.contractTypeId)),
@@ -56,7 +56,9 @@ export async function renderContracts() {
   };
   roots.forEach((r) => add(r, 0));
   contracts.forEach((c) => { if (!done.has(c.id)) add(c, 0); });
-  t.append(tb); card.append(t); root.append(card);
+  t.append(tb); card.append(t);
+  enableBulkDelete(t, { noun: '件', onDelete: async (ids) => { const r = await bulkDelete('/api/contracts', ids); toast(`${r.ok}件を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  root.append(card);
   return root;
 
   async function renewalTasks() {

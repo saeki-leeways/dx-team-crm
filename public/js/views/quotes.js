@@ -1,6 +1,6 @@
 // quotes.js — 見積（定義書 No.5・新規テーブル）。商談配下、粗利は提案額・原価から自動計算。
-import { api, state, userName, master } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg } from '../ui.js';
+import { api, state, userName, master, bulkDelete } from '../api.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderQuotes() {
@@ -25,7 +25,7 @@ export async function renderQuotes() {
   const tb = el('tbody');
   quotes.forEach((q) => {
     const opp = opps.find((o) => o.id === q.opportunityId);
-    tb.append(el('tr', {}, [
+    tb.append(el('tr', { dataset: { id: q.id } }, [
       el('td', {}, el('a', { href: '#', onclick: (e) => { e.preventDefault(); openQuote(q, opps); } }, q.quoteNumber || '（番号未設定）')),
       el('td', {}, opp ? opp.name : '—'),
       el('td', {}, statusBadge(q.status)),
@@ -36,7 +36,9 @@ export async function renderQuotes() {
       el('td', {}, el('button.btn.ghost.sm', { onclick: () => openQuote(q, opps) }, '開く')),
     ]));
   });
-  t.append(tb); card.append(t); root.append(card);
+  t.append(tb); card.append(t);
+  enableBulkDelete(t, { noun: '件', onDelete: async (ids) => { const r = await bulkDelete('/api/quotes', ids); toast(`${r.ok}件を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  root.append(card);
   return root;
 }
 

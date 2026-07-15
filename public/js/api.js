@@ -50,3 +50,12 @@ export function contractTypeLabel(id) { const c = (state.me.contractTypes || [])
 export function lossReasonLabel(id) { const r = (state.me.lossReasons || []).find((x) => x.id === id); return r ? r.label : '—'; }
 export function isAdmin() { return state.me && state.me.user.role === 'admin'; }
 export function master(key) { return (state.me.masters && state.me.masters[key]) || []; }
+
+// 複数IDを順次削除（base 例: '/api/accounts'）。{ok, fail} を返す。
+export async function bulkDelete(base, ids) {
+  let ok = 0, fail = 0;
+  for (const id of ids) {
+    try { await api.del(`${base}/${id}`); ok += 1; } catch (e) { fail += 1; }
+  }
+  return { ok, fail };
+}
