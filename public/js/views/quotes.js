@@ -1,16 +1,17 @@
 // quotes.js — 見積（定義書 No.5・新規テーブル）。商談配下、粗利は提案額・原価から自動計算。
 import { api, state, userName, master, bulkDelete } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg, enableBulkDelete, enableListTools } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderQuotes() {
   const [quotes, opps] = await Promise.all([api.get('/api/quotes'), api.get('/api/opportunities')]);
   const root = el('div');
+  let tools = null;
 
   root.append(el('div.spread.mb', {}, [
     el('div.muted.small', {}, `${quotes.length}件の見積（商談配下 / 定義書 No.5）`),
     el('div.row', {}, [
-      el('button.btn.secondary.sm', { onclick: () => importExport(quotes) }, '⇅ CSV入出力'),
+      el('button.btn.secondary.sm', { onclick: () => importExport(quotes, tools) }, '⇅ CSV入出力'),
       el('button.btn', { onclick: () => editQuote(null, opps) }, '＋ 見積を作成'),
     ]),
   ]));
@@ -38,6 +39,7 @@ export async function renderQuotes() {
   });
   t.append(tb); card.append(t);
   enableBulkDelete(t, { noun: '件', onDelete: async (ids) => { const r = await bulkDelete('/api/quotes', ids); toast(`${r.ok}件を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  tools = enableListTools(t, { pageSize: 50 });
   root.append(card);
   return root;
 }
@@ -127,10 +129,12 @@ export function editQuote(quote, opps, presetOpp) {
   }
 }
 
-function importExport(quotes) {
+function importExport(quotes, tools) {
   const cols = ['sfId', 'opportunitySfId', 'quoteNumber', 'opportunityId', 'contractId', 'status', 'validUntil', 'proposedAmount', 'costAmount', 'partnerCompany', 'ownerId', 'description'];
+  const ids = tools ? new Set(tools.getFilteredIds()) : null;
+  const src = ids ? quotes.filter((q) => ids.has(q.id)) : quotes;
   const body = el('div');
-  body.append(el('div.section-title', {}, 'エクスポート'), el('button.btn.secondary', { onclick: () => downloadCsv('quotes.csv', cols, quotes) }, '見積CSVをダウンロード'));
+  body.append(el('div.section-title', {}, 'エクスポート'), el('div.row', {}, [el('button.btn.secondary', { onclick: () => downloadCsv('quotes.csv', cols, src) }, '見積CSVをダウンロード'), el('span.export-count', {}, `${src.length} 件`)]));
   body.append(el('hr.sep'), el('div.section-title', {}, 'インポート'), el('p.small.muted', {}, `ヘッダ: ${cols.join(', ')}（粗利は自動計算）`));
   const file = el('input', { type: 'file', accept: '.csv' });
   body.append(file);

@@ -224,3 +224,79 @@ export function enableBulkDelete(table, { onDelete, noun = '件' }) {
   // データ行以外（合計行など）は列ズレ防止に空セルを先頭へ
   allTr.filter((tr) => !dataRows.includes(tr)).forEach((tr) => tr.insertBefore(el('td.sel-col'), tr.firstChild));
 }
+
+// ---- 一覧の検索条件＋ページャー ----
+// table: 対象テーブル（tbody各行に dataset.id を設定しておく）
+// 返り値: { getFilteredIds(), filteredCount() } … CSV出力の絞り込み・件数表示に利用
+// 各カラム名（ヘッダ）に対応した検索入力を生成し、セルのテキストで部分一致絞り込み。
+export function enableListTools(table, { pageSize = 50 } = {}) {
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return { getFilteredIds: () => [], filteredCount: () => 0 };
+  const dataRows = Array.from(tbody.querySelectorAll('tr')).filter((tr) => tr.dataset && tr.dataset.id);
+  if (dataRows.length === 0) return { getFilteredIds: () => [], filteredCount: () => 0 };
+  const parent = table.parentElement;
+  const headTh = Array.from(table.querySelectorAll('thead th'));
+  const searchCols = headTh.filter((th) => !th.classList.contains('sel-col') && th.textContent.trim() !== '');
+
+  let filtered = dataRows.slice();
+  let page = 1;
+  let size = pageSize;
+
+  // 検索パネル
+  const inputs = [];
+  const grid = el('div.search-grid');
+  searchCols.forEach((th) => {
+    const label = th.textContent.trim();
+    const inp = el('input', { placeholder: label });
+    inp.dataset.colIndex = th.cellIndex;
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') applySearch(); });
+    inputs.push(inp);
+    grid.append(el('label.search-field', {}, [el('span', {}, label), inp]));
+  });
+  const panel = el('div.search-panel', {}, [
+    grid,
+    el('div.row', { style: 'margin-top:10px' }, [
+      el('button.btn.sm', { onclick: applySearch }, '検索する'),
+      el('button.btn.ghost.sm', { onclick: () => { inputs.forEach((i) => { i.value = ''; }); applySearch(); } }, 'クリア'),
+    ]),
+  ]);
+  panel.style.display = 'none';
+  const toggle = el('button.btn.secondary.sm', {
+    onclick: () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; },
+  }, '🔍 検索条件');
+  const toolbar = el('div.list-toolbar', {}, [toggle]);
+
+  // ページャー
+  const info = el('span.small.muted');
+  const pageLabel = el('span.small', { style: 'min-width:56px;text-align:center' });
+  const prev = el('button.btn.ghost.sm', { onclick: () => { if (page > 1) { page--; render(); } } }, '‹ 前');
+  const next = el('button.btn.ghost.sm', { onclick: () => { if (page < pageCount()) { page++; render(); } } }, '次 ›');
+  const sizeSel = el('select', { style: 'width:auto', onchange: (e) => { size = Number(e.target.value); page = 1; render(); } },
+    [20, 50, 100].map((n) => { const o = el('option', { value: n }, n + '件'); if (n === size) o.selected = true; return o; }));
+  const footer = el('div.list-footer', {}, [info, el('div.row', {}, [prev, pageLabel, next, el('span.small.muted', {}, '表示件数'), sizeSel])]);
+
+  parent.insertBefore(toolbar, table);
+  parent.insertBefore(panel, table);
+  parent.appendChild(footer);
+
+  function pageCount() { return Math.max(1, Math.ceil(filtered.length / size)); }
+  function applySearch() {
+    const active = inputs.filter((i) => i.value.trim()).map((i) => ({ idx: Number(i.dataset.colIndex), q: i.value.trim().toLowerCase() }));
+    filtered = active.length
+      ? dataRows.filter((tr) => active.every((a) => (tr.cells[a.idx] ? tr.cells[a.idx].textContent.toLowerCase() : '').includes(a.q)))
+      : dataRows.slice();
+    page = 1; render();
+  }
+  function render() {
+    if (page > pageCount()) page = pageCount();
+    const start = (page - 1) * size, end = start + size;
+    const visible = new Set(filtered.slice(start, end));
+    dataRows.forEach((tr) => { tr.style.display = visible.has(tr) ? '' : 'none'; });
+    info.textContent = filtered.length ? `全 ${filtered.length} 件中 ${start + 1}–${Math.min(end, filtered.length)} 件を表示` : '該当データなし';
+    pageLabel.textContent = `${page} / ${pageCount()}`;
+    prev.disabled = page <= 1; next.disabled = page >= pageCount();
+  }
+  render();
+
+  return { getFilteredIds: () => filtered.map((tr) => tr.dataset.id), filteredCount: () => filtered.length };
+}

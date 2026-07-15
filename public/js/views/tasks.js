@@ -1,6 +1,6 @@
 // tasks.js — 活動・タスク管理（FR-04-3 タスク・リマインド / 放置案件アラート）
 import { api, state, userName, bulkDelete } from '../api.js';
-import { el, clear, modal, toast, field, input, select, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete, enableListTools } from '../ui.js';
 import { parseCsv } from './accounts.js';
 
 let filter = 'open';
@@ -60,6 +60,7 @@ export async function renderTasks() {
   });
   t.append(tb); card.append(t);
   enableBulkDelete(t, { noun: '件', onDelete: async (ids) => { const r = await bulkDelete('/api/tasks', ids); toast(`${r.ok}件を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  enableListTools(t, { pageSize: 50 });
   root.append(card);
   return root;
 

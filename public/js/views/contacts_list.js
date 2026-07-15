@@ -1,17 +1,18 @@
 // contacts_list.js — 取引先担当者の横断一覧（FR-01-2）。全取引先の担当者をまとめて表示・編集。
 import { api, state, userName, bulkDelete } from '../api.js';
-import { el, clear, modal, toast, field, select, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
+import { el, clear, modal, toast, field, select, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete, enableListTools } from '../ui.js';
 import { editContact, downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderContactsList() {
   const [contacts, accounts] = await Promise.all([api.get('/api/contacts'), api.get('/api/accounts')]);
   const accById = Object.fromEntries(accounts.map((a) => [a.id, a]));
   const root = el('div');
+  let tools = null;
 
   root.append(el('div.spread.mb', {}, [
     el('div.muted.small', {}, `${contacts.length}名（全取引先の担当者）`),
     el('div.row', {}, [
-      el('button.btn.secondary.sm', { onclick: () => importExport(contacts, accById) }, '⇅ CSV入出力'),
+      el('button.btn.secondary.sm', { onclick: () => importExport(contacts, accById, tools) }, '⇅ CSV入出力'),
       el('button.btn', { onclick: () => pickAccountThenAdd(accounts) }, '＋ 担当者を追加'),
     ]),
   ]));
@@ -52,6 +53,7 @@ export async function renderContactsList() {
   });
   t.append(tb); card.append(t);
   enableBulkDelete(t, { noun: '名', onDelete: async (ids) => { const r = await bulkDelete('/api/contacts', ids); toast(`${r.ok}名を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  tools = enableListTools(t, { pageSize: 50 });
   root.append(card);
   return root;
 
@@ -74,12 +76,17 @@ function pickAccountThenAdd(accounts) {
 }
 
 // CSV入出力（担当者）。取引先の紐付けは accountId / accountSfId / accountName で解決（§7）
-function importExport(contacts, accById) {
+function importExport(contacts, accById, tools) {
   const cols = ['sfId', 'name', 'kana', 'accountId', 'accountSfId', 'accountName', 'department', 'title', 'decisionRole', 'email', 'phone', 'mobilePhone', 'leadSource', 'leadSourceDetail', 'leadDate', 'resignationDate', 'optOut', 'ownerEmail'];
+  const ids = tools ? new Set(tools.getFilteredIds()) : null;
+  const src = ids ? contacts.filter((c) => ids.has(c.id)) : contacts;
   const body = el('div');
   body.append(el('div.section-title', {}, 'エクスポート'));
-  const exportRows = contacts.map((c) => ({ ...c, accountName: accById[c.accountId]?.name || '' }));
-  body.append(el('button.btn.secondary', { onclick: () => downloadCsv('contacts.csv', cols, exportRows) }, '担当者CSVをダウンロード'));
+  const exportRows = src.map((c) => ({ ...c, accountName: accById[c.accountId]?.name || '' }));
+  body.append(el('div.row', {}, [
+    el('button.btn.secondary', { onclick: () => downloadCsv('contacts.csv', cols, exportRows) }, '担当者CSVをダウンロード'),
+    el('span.export-count', {}, `${exportRows.length} 件`),
+  ]));
   body.append(el('hr.sep'), el('div.section-title', {}, 'インポート'));
   body.append(el('p.small.muted', {}, '取引先の紐付けは accountId / accountSfId / accountName のいずれかで解決。sfId があれば重複せず更新（アップサート）。'));
   const file = el('input', { type: 'file', accept: '.csv' });

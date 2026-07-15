@@ -189,6 +189,15 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .count-card:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(20,30,60,.1); }
 .count-ico { font-size: 22px; line-height: 1; opacity: .85; }
 
+/* ---- 検索条件＋ページャー ---- */
+.list-toolbar { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+.search-panel { padding: 12px 14px; border-bottom: 1px solid var(--border); background: #fafbfd; }
+.search-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 14px; }
+.search-field span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.list-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.list-footer button[disabled] { opacity: .4; cursor: default; }
+.export-count { margin-left: 10px; font-weight: 700; color: var(--primary-dark); }
+
 /* ---- 複数選択＋一括削除 ---- */
 .bulk-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 14px; background: #eaf1ff; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 3; }
 .bulk-bar .small { font-weight: 600; color: var(--primary-dark); }

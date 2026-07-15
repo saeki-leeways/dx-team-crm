@@ -1,15 +1,16 @@
 // accounts.js — 取引先マスタ（FR-01-1・定義書 No.1／グループ階層 D3）＋ 担当者（FR-01-2・定義書 No.2）
 import { api, state, userName, entityName, master, bulkDelete } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, fmtDate, importMsg, enableBulkDelete, enableListTools } from '../ui.js';
 
 export async function renderAccounts() {
   const accounts = await api.get('/api/accounts');
   const root = el('div');
+  let tools = null;
 
   root.append(el('div.spread.mb', {}, [
     el('div.muted.small', {}, `${accounts.length}社（親会社→子会社の階層で表示 / D3）`),
     el('div.row', {}, [
-      el('button.btn.secondary.sm', { onclick: () => importExport(accounts) }, '⇅ CSV入出力'),
+      el('button.btn.secondary.sm', { onclick: () => importExport(accounts, tools) }, '⇅ CSV入出力'),
       el('button.btn', { onclick: () => editAccount(null, accounts) }, '＋ 取引先を追加'),
     ]),
   ]));
@@ -49,7 +50,10 @@ export async function renderAccounts() {
   table.append(tbody);
   card.append(table);
   if (accounts.length === 0) { clear(card); card.append(el('div.empty', {}, '取引先がありません。「取引先を追加」から登録してください。')); }
-  else enableBulkDelete(table, { noun: '社', onDelete: async (ids) => { const r = await bulkDelete('/api/accounts', ids); toast(`${r.ok}社を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  else {
+    enableBulkDelete(table, { noun: '社', onDelete: async (ids) => { const r = await bulkDelete('/api/accounts', ids); toast(`${r.ok}社を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+    tools = enableListTools(table, { pageSize: 50 });
+  }
   root.append(card);
   return root;
 }
@@ -219,12 +223,17 @@ function editAccount(account, accounts) {
   }
 }
 
-// CSV入出力（FR-08-4）
-function importExport(accounts) {
+// CSV入出力（FR-08-4）。tools があれば絞り込み後のデータのみエクスポート＆件数表示
+function importExport(accounts, tools) {
   const cols = ['sfId', 'name', 'entityId', 'targetCategory', 'industryLarge', 'industryMedium', 'website', 'employees', 'capital', 'postalCode', 'parentId', 'address', 'ownerId', 'note'];
+  const ids = tools ? new Set(tools.getFilteredIds()) : null;
+  const exportRows = ids ? accounts.filter((a) => ids.has(a.id)) : accounts;
   const body = el('div');
   body.append(el('div.section-title', {}, 'エクスポート'));
-  body.append(el('button.btn.secondary', { onclick: () => downloadCsv('accounts.csv', cols, accounts) }, '取引先CSVをダウンロード'));
+  body.append(el('div.row', {}, [
+    el('button.btn.secondary', { onclick: () => downloadCsv('accounts.csv', cols, exportRows) }, '取引先CSVをダウンロード'),
+    el('span.export-count', {}, `${exportRows.length} 件`),
+  ]));
   body.append(el('hr.sep'));
   body.append(el('div.section-title', {}, 'インポート'));
   body.append(el('p.small.muted', {}, `1行目にヘッダ（${cols.join(', ')}）。name列必須。`));

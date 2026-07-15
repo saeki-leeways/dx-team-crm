@@ -1,6 +1,6 @@
 // contracts.js — 契約・更新管理（FR-03-1 登録 / FR-03-2 定期・分割 / FR-03-3 更新アラート）
 import { api, state, userName, entityName, contractTypeLabel, bulkDelete } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, yen, fmtDate, importMsg, enableBulkDelete, enableListTools } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 
 export async function renderContracts() {
@@ -8,11 +8,12 @@ export async function renderContracts() {
     api.get('/api/contracts'), api.get('/api/opportunities'), api.get('/api/accounts'), api.get('/api/alerts/renewal'),
   ]);
   const root = el('div');
+  let tools = null;
 
   root.append(el('div.spread.mb', {}, [
     el('div.muted.small', {}, `${contracts.length}件の契約（案件から分離して管理 / D1）`),
     el('div.row', {}, [
-      el('button.btn.secondary.sm', { onclick: () => importExport(contracts) }, '⇅ CSV入出力'),
+      el('button.btn.secondary.sm', { onclick: () => importExport(contracts, tools) }, '⇅ CSV入出力'),
       el('button.btn.secondary.sm', { onclick: renewalTasks }, '更新提案タスクを一括起票'),
       el('button.btn', { onclick: () => editContract(null, opps, accounts, contracts) }, '＋ 契約を登録'),
     ]),
@@ -58,6 +59,7 @@ export async function renderContracts() {
   contracts.forEach((c) => { if (!done.has(c.id)) add(c, 0); });
   t.append(tb); card.append(t);
   enableBulkDelete(t, { noun: '件', onDelete: async (ids) => { const r = await bulkDelete('/api/contracts', ids); toast(`${r.ok}件を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  tools = enableListTools(t, { pageSize: 50 });
   root.append(card);
   return root;
 
@@ -169,10 +171,12 @@ function editContract(contract, opps, accounts, contracts, parentContract) {
   }
 }
 
-function importExport(contracts) {
+function importExport(contracts, tools) {
   const cols = ['sfId', 'accountSfId', 'name', 'managementNumber', 'accountId', 'entityId', 'opportunityId', 'parentId', 'ownerId', 'contractTypeId', 'startDate', 'endDate', 'cancellationDate', 'nextRenewalDecisionDate', 'salesRecordingMonth', 'nextBillingScheduledDate', 'billingType', 'monthlyAmount', 'monthlyGrossProfit', 'spotSales', 'spotGrossProfit', 'apiUsage', 'renewalAlertMonths', 'paymentTerms', 'status'];
+  const ids = tools ? new Set(tools.getFilteredIds()) : null;
+  const src = ids ? contracts.filter((c) => ids.has(c.id)) : contracts;
   const body = el('div');
-  body.append(el('div.section-title', {}, 'エクスポート'), el('button.btn.secondary', { onclick: () => downloadCsv('contracts.csv', cols, contracts) }, '契約CSVをダウンロード'));
+  body.append(el('div.section-title', {}, 'エクスポート'), el('div.row', {}, [el('button.btn.secondary', { onclick: () => downloadCsv('contracts.csv', cols, src) }, '契約CSVをダウンロード'), el('span.export-count', {}, `${src.length} 件`)]));
   body.append(el('hr.sep'), el('div.section-title', {}, 'インポート'), el('p.small.muted', {}, `ヘッダ: ${cols.join(', ')}（name必須）`));
   const file = el('input', { type: 'file', accept: '.csv' });
   body.append(file);

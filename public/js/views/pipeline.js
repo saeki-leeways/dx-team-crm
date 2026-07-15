@@ -1,6 +1,6 @@
 // pipeline.js — 商談・パイプライン（FR-02-1..5・定義書 No.3）＋ 商談詳細（活動 No.4 / 見積 No.5 / 想定契約形態）
 import { api, state, userName, phaseByKey, contractTypeLabel, lossReasonLabel, bulkDelete } from '../api.js';
-import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, man, yen, fmtDate, importMsg, enableBulkDelete } from '../ui.js';
+import { el, clear, modal, toast, field, input, select, textarea, collectForm, badge, confirmDialog, man, yen, fmtDate, importMsg, enableBulkDelete, enableListTools } from '../ui.js';
 import { downloadCsv, parseCsv } from './accounts.js';
 import { editQuote } from './quotes.js';
 
@@ -9,20 +9,21 @@ let viewMode = 'kanban';
 export async function renderPipeline() {
   const [opps, accounts] = await Promise.all([api.get('/api/opportunities'), api.get('/api/accounts')]);
   const root = el('div');
+  let tools = null;
 
   root.append(el('div.spread.mb', {}, [
     el('div.pill-tabs', { style: 'margin:0' }, [
       tab('カンバン', 'kanban'), tab('一覧', 'list'),
     ]),
     el('div.row', {}, [
-      el('button.btn.secondary.sm', { onclick: () => importExport(opps, accounts) }, '⇅ CSV入出力'),
+      el('button.btn.secondary.sm', { onclick: () => importExport(opps, accounts, tools) }, '⇅ CSV入出力'),
       el('button.btn', { onclick: () => editOpp(null, accounts) }, '＋ 商談を追加'),
     ]),
   ]));
 
   const container = el('div');
   if (viewMode === 'kanban') container.append(renderKanban(opps, accounts));
-  else container.append(renderList(opps, accounts));
+  else container.append(renderList(opps, accounts, (t) => { tools = t; }));
   root.append(container);
 
   function tab(label, mode) {
@@ -78,7 +79,7 @@ function kanbanCard(o, accounts, today) {
 }
 
 // ---- 一覧 ----
-function renderList(opps, accounts) {
+function renderList(opps, accounts, onTools) {
   const card = el('div.card');
   if (opps.length === 0) { card.append(el('div.empty', {}, '商談がありません')); return card; }
   const t = el('table');
@@ -102,6 +103,8 @@ function renderList(opps, accounts) {
   });
   t.append(tb); card.append(t);
   enableBulkDelete(t, { noun: '件', onDelete: async (ids) => { const r = await bulkDelete('/api/opportunities', ids); toast(`${r.ok}件を削除しました${r.fail ? `（失敗${r.fail}）` : ''}`, 'success'); rerender(); } });
+  const tools = enableListTools(t, { pageSize: 50 });
+  if (onTools) onTools(tools);
   return card;
 }
 
@@ -402,11 +405,13 @@ function addTask(o, refresh) {
   }
 }
 
-function importExport(opps, accounts) {
+function importExport(opps, accounts, tools) {
   const cols = ['sfId', 'accountSfId', 'name', 'accountId', 'entityId', 'phaseKey', 'ownerId', 'amount', 'expectedContractType', 'closeDate', 'valueChain', 'dxPhase'];
-  const rows = opps.map((o) => ({ ...o, valueChain: o.tags?.valueChain, dxPhase: o.tags?.dxPhase }));
+  const ids = tools ? new Set(tools.getFilteredIds()) : null;
+  const src = ids ? opps.filter((o) => ids.has(o.id)) : opps;
+  const rows = src.map((o) => ({ ...o, valueChain: o.tags?.valueChain, dxPhase: o.tags?.dxPhase }));
   const body = el('div');
-  body.append(el('div.section-title', {}, 'エクスポート'), el('button.btn.secondary', { onclick: () => downloadCsv('opportunities.csv', cols, rows) }, '商談CSVをダウンロード'));
+  body.append(el('div.section-title', {}, 'エクスポート'), el('div.row', {}, [el('button.btn.secondary', { onclick: () => downloadCsv('opportunities.csv', cols, rows) }, '商談CSVをダウンロード'), el('span.export-count', {}, `${rows.length} 件`)]));
   body.append(el('hr.sep'), el('div.section-title', {}, 'インポート'), el('p.small.muted', {}, `ヘッダ: ${cols.join(', ')}（name必須）`));
   const file = el('input', { type: 'file', accept: '.csv' });
   body.append(file);
